@@ -1,51 +1,129 @@
-from typing import List
-from constants import E_PLAYER_TYPES, E_GAME_STATUSES, INITIAL_SHIP_SET
-from CBoard import CBoard
-from CShip import CShip, CThreeDeckShip, CTwoDeckShip, CSingleDeckShip
+from random import randint
+from cfield import CField
+from constants import EPlayer, EGameStatus, SHOW_AI_SHIPS
+
 
 class CGame:
-
+    """
+    класс игры
+    """
     def __init__(self):
-        self._status: E_GAME_STATUSES = None
-        self._boards: List[CBoard] = []
-        self._boards.append(CBoard(E_PLAYER_TYPES.HUMAN))
-        self._boards.append(CBoard(E_PLAYER_TYPES.AI))
+        """
+        первичная инициализация
+        """
+        self._status = EGameStatus.NONACTIVE
+        self._mover = None
+        self._winner = None
+        self._status = None
+        self._move_index = 0
+        self._fields = []
+
+        for player_type in EPlayer:
+            self._fields.append(CField(player_type))
 
     def start(self):
-        if self._status is not None and self._status != E_GAME_STATUSES.FINISHED:
-            raise Exception('Ошибочная инициализация игры')
+        """
+        начало очередной партии
+        :return: None
+        """
+        self._status = EGameStatus.INITIALIZING
+        self._mover = None
+        self._winner = None
+        self._status = None
+        self._move_index = 0
 
-        self._status = E_GAME_STATUSES.INITIALIZING
+        for field in self._fields:
+            field.init()
 
-        self.generate_ai_board()
+        self._status = EGameStatus.ACTIVE
+        self._mover = EPlayer.AI if randint(1, 2) == 1 else EPlayer.HUMAN
+
+        while self._status != EGameStatus.FINISHED:
+            self.next_move()
+
+    def next_move(self):
+        self._move_index += 1
+        if self._move_index % 2 != 0:
+            print("============")
+
+        current_round = int(self._move_index / 2) + 1 if self._move_index % 2 != 0 else int(self._move_index / 2)
+        postfix = "Ход ИИ" if self._mover == EPlayer.AI else "Ваш ход"
+        print(f"Раунд № {current_round} - {postfix}")
+
+        if self._mover == EPlayer.AI:
+            self.ai_shot()
+            if not self.human_field.has_undestroyed_ships():
+                print("К сожалению, ИИ победил")
+                self._status = EGameStatus.FINISHED
+        else:
+            self.print_both_fields()
+            self.human_shot()
+            if not self.ai_field.has_undestroyed_ships():
+                print("Вы победили! Поздравляем!")
+                self._status = EGameStatus.FINISHED
+
+        self._mover = EPlayer.AI if self._mover == EPlayer.HUMAN else EPlayer.HUMAN
 
     @property
-    def status(self):
-        return self._status
+    def human_field(self) -> CField:
+        """
+        возвращает поле игрока-человека
+        :return: CField
+        """
+        return list(filter(lambda field: field.owner == EPlayer.HUMAN, self._fields))[0]
 
-    @status.setter
-    def status(self, status: E_GAME_STATUSES) -> None:
-        if (
-                (status == self._status)
-                or (status == E_GAME_STATUSES.INITIALIZING and not self._status in [None, E_GAME_STATUSES.FINISHED])
-                or (status == E_GAME_STATUSES.PLAYING and self._status != E_GAME_STATUSES.INITIALIZING)
-                or (status == E_GAME_STATUSES.FINISHED and self._status != E_GAME_STATUSES.PLAYING)
-        ):
-            exception_text = f'Игре не может быть назначен статус "{status.value}"'
+    @property
+    def ai_field(self) -> CField:
+        """
+        возвращает поле ИИ
+        :return: CField
+        """
+        return list(filter(lambda field: field.owner == EPlayer.AI, self._fields))[0]
 
-            if not self._status is None:
-                exception_text += f', поскольку текущий статус "{self._status.value}"'
-            else:
-                exception_text += f', поскольку игра не инициализирована'
+    def ai_shot(self):
+        """
+        выстрел ИИ
+        :return: None
+        """
+        cell = self.human_field.non_shelled_cells[randint(0, len(self.human_field.non_shelled_cells) - 1)]
+        self.human_field.shoot_cell(cell)
 
-            raise Exception(exception_text)
+    def human_shot(self):
+        """
+        выстрел человека
+        :return: None
+        """
+        while True:
+            try:
+                x_str, y_str = input(
+                    f'Введите X- и Y-координаты обстреливаемой клетки в виде пары целых чисел через пробел: ').split()
+                x = int(x_str)
+                y = int(y_str)
 
-        self._status = status
+                if not CField.check_cell_coords((x, y)):
+                    raise ValueError()
+            except ValueError:
+                print("ОШИБКА! Некорректные координаты обстреливаемой клетки")
+                continue
 
-    def generate_ai_board(self):
-        for ship_type, quantity in INITIAL_SHIP_SET.items():
-            print(eval(ship_type), quantity)
+            try:
+                self.ai_field.shoot_cell((x, y))
+            except Exception as e:
+                print(e)
+                continue
+
+            break
+
+    def print_both_fields(self):
+        human_field_strings = self._fields[0].get_field_strings()
+        ai_field_strings = self._fields[1].get_field_strings(SHOW_AI_SHIPS)
+        common_strings = []
+
+        for i in range(0, len(human_field_strings)):
+            common_strings.append(human_field_strings[i] + (' ' * 8) + ai_field_strings[i])
+
+        print('\n'.join(common_strings))
 
 
-    def step(self):
-        pass
+if __name__ == '__main__':
+    pass
